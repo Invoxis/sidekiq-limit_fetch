@@ -241,8 +241,6 @@ module Sidekiq::LimitFetch
     Time.now.to_f - last_attempt < ATTEMPT_INTERVAL
   end
 
-  TIMEOUT = Sidekiq::BasicFetch::TIMEOUT
-
   def post_6_5?
     @post_6_5 ||= Gem::Version.new(Sidekiq::VERSION) >= Gem::Version.new('6.5.0')
   end
