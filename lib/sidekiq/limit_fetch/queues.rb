@@ -5,6 +5,7 @@ module Sidekiq::LimitFetch::Queues
 
   def start(options)
     @queues         = options[:queues]
+    @startup_queues = options[:queues].dup
     @dynamic        = options[:dynamic]
 
     @limits         = options[:limits] || {}
@@ -19,15 +20,17 @@ module Sidekiq::LimitFetch::Queues
   end
 
   def acquire
-    selector.acquire(ordered_queues, namespace)
-      .tap {|it| save it }
-      .map {|it| "queue:#{it}" }
+    queues = saved
+    queues ||= Sidekiq::LimitFetch.redis_retryable do
+      selector.acquire(ordered_queues, namespace)
+    end
+    save queues
+    queues.map { |it| "queue:#{it}" }
   end
 
   def release_except(full_name)
     queues = restore
     queues.delete full_name[/queue:(.*)/, 1] if full_name
-
     Sidekiq::LimitFetch.redis_retryable do
       selector.release queues, namespace
     end
@@ -37,15 +40,38 @@ module Sidekiq::LimitFetch::Queues
     @dynamic
   end
 
+  def startup_queue?(queue)
+    @startup_queues.include?(queue)
+  end
+
   def add(queues)
+    return unless queues
     queues.each do |queue|
       unless @queues.include? queue
-        apply_process_limit_to_queue(queue)
-        apply_limit_to_queue(queue)
+        if startup_queue?(queue)
+          apply_process_limit_to_queue(queue)
+          apply_limit_to_queue(queue)
+        end
 
         @queues.push queue
       end
     end
+  end
+
+  def remove(queues)
+    return unless queues
+    queues.each do |queue|
+      if @queues.include? queue
+        clear_limits_for_queue(queue)
+        @queues.delete queue
+        Sidekiq::Queue.delete_instance(queue)
+      end
+    end
+  end
+
+  def handle(queues)
+    add(queues - @queues)
+    remove(@queues - queues)
   end
 
   def strict_order!
@@ -108,8 +134,17 @@ module Sidekiq::LimitFetch::Queues
     end
   end
 
+  def clear_limits_for_queue(queue_name)
+    queue = Sidekiq::Queue[queue_name]
+    queue.clear_limits
+  end
+
   def selector
     Sidekiq::LimitFetch::Global::Selector
+  end
+
+  def saved
+    Thread.current[THREAD_KEY]
   end
 
   def save(queues)
@@ -117,8 +152,8 @@ module Sidekiq::LimitFetch::Queues
   end
 
   def restore
-    Thread.current[THREAD_KEY] || []
+    saved || []
   ensure
-    Thread.current[THREAD_KEY] = nil
+    save nil
   end
 end

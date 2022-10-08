@@ -11,7 +11,7 @@ module Sidekiq::LimitFetch::Global
       Thread.new do
         loop do
           Sidekiq::LimitFetch.redis_retryable do
-            add_dynamic_queues
+            handle_dynamic_queues
             update_heartbeat ttl
             invalidate_old_processes
           end
@@ -33,23 +33,23 @@ module Sidekiq::LimitFetch::Global
 
     def remove_old_processes!
       Sidekiq.redis do |it|
-        old_processes.each {|process| it.srem PROCESS_SET, process }
+        old_processes.each {|process| it.srem PROCESS_SET, [process] }
       end
     end
 
-    def add_dynamic_queues
+    def handle_dynamic_queues
       queues = Sidekiq::LimitFetch::Queues
-      queues.add Sidekiq::Queue.all.map(&:name) if queues.dynamic?
+      queues.handle Sidekiq::Queue.all.map(&:name) if queues.dynamic?
     end
 
     private
 
     def update_heartbeat(ttl)
       Sidekiq.redis do |it|
-        it.multi do
-          it.set heartbeat_key, true
-          it.sadd PROCESS_SET, Selector.uuid
-          it.expire heartbeat_key, ttl
+        it.multi do |pipeline|
+          pipeline.set heartbeat_key, true
+          pipeline.sadd PROCESS_SET, [Selector.uuid]
+          pipeline.expire heartbeat_key, ttl
         end
       end
     end

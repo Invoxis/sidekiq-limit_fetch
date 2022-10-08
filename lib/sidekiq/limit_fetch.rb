@@ -14,6 +14,8 @@ module Sidekiq::LimitFetch
   require_relative 'extensions/queue'
   require_relative 'extensions/manager'
 
+  TIMEOUT = Sidekiq::BasicFetch::TIMEOUT
+
   extend self
 
   CLEAN_INTERVAL          = 60 * 60  # 1 hour
@@ -77,11 +79,35 @@ module Sidekiq::LimitFetch
     Sidekiq.logger.warn("Failed to requeue #{inprogress.size} jobs: #{ex.message}")
   end
 
+  def config
+    # Post 6.5, Sidekiq.options is deprecated and replaced with passing Sidekiq directly
+    post_6_5? ? Sidekiq : Sidekiq.options
+  end
+
+  # Backwards compatibility for sidekiq v6.1.0
+  # @see https://github.com/mperham/sidekiq/pull/4602
+  # def bulk_requeue(*args)
+  #   if Sidekiq::BasicFetch.respond_to?(:bulk_requeue) # < 6.1.0
+  #     Sidekiq::BasicFetch.bulk_requeue(*args)
+  #   else # 6.1.0+
+  #     Sidekiq::BasicFetch.new(config).bulk_requeue(*args)
+  #   end
+  # end
+
   def redis_retryable
     yield
   rescue Redis::BaseConnectionError
-    sleep 1
+    sleep TIMEOUT
     retry
+  rescue Redis::CommandError => error
+    # If Redis was restarted and is still loading its snapshot,
+    # then we should treat this as a temporary connection error too.
+    if error.message =~ /^LOADING/
+      sleep TIMEOUT
+      retry
+    else
+      raise
+    end
   end
 
   class << self
@@ -217,12 +243,16 @@ module Sidekiq::LimitFetch
 
   TIMEOUT = Sidekiq::BasicFetch::TIMEOUT
 
+  def post_6_5?
+    @post_6_5 ||= Gem::Version.new(Sidekiq::VERSION) >= Gem::Version.new('6.5.0')
+  end
+
   def redis_brpop(queues)
     if queues.empty?
       sleep TIMEOUT  # there are no queues to handle, so lets sleep
       []             # and return nothing
     else
-      redis_retryable { Sidekiq.redis { |it| it.brpop *queues, TIMEOUT } }
+      redis_retryable { Sidekiq.redis { |it| it.brpop *queues, timeout: TIMEOUT } }
     end
   end
 end
