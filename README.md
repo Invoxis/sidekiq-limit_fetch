@@ -4,6 +4,10 @@
 
 Sidekiq strategy to support a granular queue control – limiting, pausing, blocking, querying.
 
+- `Gem Version: 4.4.2`
+- Reliable fetch was inspired by Gitlab's `sidekiq-reliable-fetch`
+
+
 [![CI](https://github.com/deanpcmad/sidekiq-limit_fetch/actions/workflows/ci.yml/badge.svg)](https://github.com/deanpcmad/sidekiq-limit_fetch/actions/workflows/ci.yml)
 [![Gem Version](https://badge.fury.io/rb/sidekiq-limit_fetch.svg)](http://badge.fury.io/rb/sidekiq-limit_fetch)
 

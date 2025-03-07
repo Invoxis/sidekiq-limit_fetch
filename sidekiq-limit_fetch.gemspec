@@ -3,7 +3,7 @@
 require 'English'
 Gem::Specification.new do |gem|
   gem.name          = 'sidekiq-limit_fetch'
-  gem.version       = '4.4.1'
+  gem.version       = '4.4.2'
   gem.license       = 'MIT'
   gem.authors       = ['Dean Perry']
   gem.email         = 'dean@deanpcmad.com'
@@ -22,7 +22,7 @@ Gem::Specification.new do |gem|
 
   gem.required_ruby_version = '>= 2.7.0'
 
-  gem.add_dependency 'sidekiq', '>= 6'
+  gem.add_dependency 'sidekiq', '>= 6.1.0'
   gem.add_development_dependency 'appraisal'
   gem.add_development_dependency 'rake'
   gem.add_development_dependency 'redis-namespace', '~> 1.5', '>= 1.5.2'
