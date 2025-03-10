@@ -143,7 +143,7 @@ module Sidekiq
       Sidekiq.logger.info('Cleaning working queues')
 
       Sidekiq.redis do |conn|
-        conn.scan_each(match: "#{WORKING}:queue:*", count: SCAN_NUMBER) do |key|
+        conn.scan(match: "#{WORKING}:queue:*", count: SCAN_NUMBER) do |key|
 
           hostname, pid = key.scan(/:([^:]*):([0-9]*)\z/).flatten
 
